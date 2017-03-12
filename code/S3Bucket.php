@@ -162,4 +162,45 @@ class S3Bucket extends CloudBucket
 			return -1;
 		}
 	}
+	
+    /**
+     * @param File|string $f - the string should be the Filename field of a File
+     * @param int $linkType [optional]
+     * @return string
+     */
+    public function getLinkFor($f, $linkType = self::LINK_SMART)
+    {
+        switch ($linkType) {
+            case self::LINK_HTTP:
+                $field = 'baseURL';
+                break;
+
+            case self::LINK_HTTPS:
+                $field = 'secureURL';
+                break;
+
+            default:
+                $ssl   = Director::is_https() && !empty($this->secureURL);
+                $field = $ssl ? 'secureURL' : 'baseURL';
+        }
+
+        $base  = null;
+
+        if (count($this->$field) > 1 && is_object($f)) {
+            // If there are multiple urls, use cloud meta to remember
+            // which one we used so the url stays the same for any
+            // given image, allowing the image to still be cached
+            $base = $f->getCloudMeta($field);
+            if (!$base) {
+                $base = $this->roundRobinGet($field);
+                $f->setCloudMeta($field, $base);
+                $f->write();
+            }
+        } else {
+            // If there's only one, don't touch meta data
+            $base = $this->roundRobinGet($field);
+        }
+
+        return Controller::join_links($base, $this->containerName, $this->getRelativeLinkFor($f));
+    }
 }
